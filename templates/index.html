@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kripto Árfolyam Prediktor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; background-color: #f4f4f9; color: #333; }
+        h1, h2 { text-align: center; color: #444; }
+        .prediction { text-align: center; font-size: 1.5em; margin: 20px; padding: 15px; background-color: #e0e7ff; border-radius: 8px; }
+        .prediction span { font-weight: bold; color: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <h1>Kripto Árfolyam Prediktor</h1>
+    <h2>Bitcoin (BTC) árfolyamának előrejelzése USD-ben</h2>
+
+    <div class="prediction">
+        A modell jóslata a következő napra: <span>${{ prediction | round(2) }}</span>
+    </div>
+
+    <div>
+        <canvas id="priceChart"></canvas>
+    </div>
+
+    <script>
+        // A Flask által átadott adatok beolvasása
+        const labels = {{ labels | tojson }};
+        const prices = {{ prices | tojson }};
+
+        const data = {
+            labels: labels,
+            datasets: [{
+                label: 'Bitcoin Árfolyam (USD)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgb(75, 192, 192)',
+                data: prices,
+                fill: true,
+            }]
+        };
+
+        const config = {
+            type: 'line',
+            data: data,
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Dátum'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Árfolyam (USD)'
+                        }
+                    }
+                }
+            }
+        };
+
+        // A grafikon létrehozása
+        const priceChart = new Chart(
+            document.getElementById('priceChart'),
+            config
+        );
+    </script>
+
+</body>
+</html>
