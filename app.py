@@ -17,6 +17,7 @@ app = Flask(__name__)
 
 # --- Adatbázis-kezelő Függvények ---
 def init_db():
+    # Ez a függvény változatlan
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
     conn = sqlite3.connect(DB_FILE)
@@ -32,14 +33,13 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
-    print("Adatbázis sikeresen inicializálva.") # Log üzenet a hibakereséshez
+    print("Adatbázis sikeresen inicializálva.")
 
-# JAVÍTÁS: Az adatbázis inicializálását áthelyezzük ide.
-# Ez a függvény lefut egyszer, az első kérés beérkezése előtt.
-# Ez biztosítja, hogy a Gunicorn workerek már egy létező adatbázissal dolgozzanak.
-@app.before_first_request
-def setup():
-    init_db()
+# JAVÍTÁS: Eltávolítottuk a @app.before_first_request dekorátort,
+# és közvetlenül itt hívjuk meg az init_db() függvényt.
+# Ez a kód lefut, amikor a Gunicorn betölti az alkalmazást,
+# így az adatbázis garantáltan létezni fog az első kérés előtt.
+init_db()
 
 def save_data_to_db(df):
     conn = sqlite3.connect(DB_FILE)
@@ -122,8 +122,6 @@ def index():
     return render_template('index.html', prediction=predicted_price, labels=labels, prices=prices)
 
 # --- Alkalmazás Indítása ---
-# Ez a rész továbbra is megmarad a helyi (lokális) futtatáshoz.
-# A Render a Gunicorn-t használja, így ezt a blokkot figyelmen kívül hagyja.
 if __name__ == '__main__':
-    # A setup() hívás már nem itt van, hanem a before_first_request-ben.
     app.run(debug=True)
+
