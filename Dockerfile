@@ -1,4 +1,4 @@
-# Dockerfile (MÓDOSÍTOTT)
+# Dockerfile
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -8,15 +8,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Az összes fájl másolása
 COPY . .
 
-# A build script futtathatóvá tétele
+# Ez a két sor biztosítja, hogy a script Linux-kompatibilis legyen.
+# 1. Eltávolítja a Windows-specifikus sorvégződéseket.
+RUN sed -i 's/\r$//' ./render-build.sh
+# 2. Futtathatóvá teszi a build scriptet.
 RUN chmod +x ./render-build.sh
 
-# JAVÍTÁS: Itt futtatjuk le a telepítő szkriptet a Docker image építése közben.
-# Ez a lépés fogja létrehozni és feltölteni az adatbázist.
+# A telepítő szkript futtatása a Docker image építése közben.
 RUN ./render-build.sh
 
 ENV PORT 8000
 EXPOSE 8000
 
-# A Start parancs változatlan, ezt fogja használni a Render
+# Az alkalmazás indító parancsa
 CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:${PORT}", "app:app"]
