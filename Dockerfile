@@ -1,48 +1,32 @@
-# # Dockerfile
+# Hivatalos, pehelykönnyű Python alap image használata
 FROM python:3.11-slim
+
+# Munkakönyvtár beállítása az appon belül
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
+# A környezeti változók beállítása, hogy a Python logok azonnal megjelenjenek
+ENV PYTHONUNBUFFERED 1
+
+# Először csak a requirements fájlt másoljuk be, hogy a Docker cache-t ki tudjuk használni
+COPY requirements.txt .
+
+# A Python függőségek telepítése
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Az összes fájl másolása
+# A projekt összes többi fájljának másolása
 COPY . .
 
-# Ez a két sor biztosítja, hogy a script Linux-kompatibilis legyen.
-# 1. Eltávolítja a Windows-specifikus sorvégződéseket.
-RUN sed -i 's/\r$//' ./render-build.sh
-# 2. Futtathatóvá teszi a build scriptet.
-RUN chmod +x ./render-build.sh
+# ---------------- FONTOS ----------------
+# Itt kell megadni azokat a parancsokat, amik a render-build.sh fájlban voltak.
+# Például, ha adatbázis-migrációt kell futtatni:
+# RUN flask db upgrade
+# VAGY Django esetén:
+# RUN python manage.py migrate
+# ----------------------------------------
 
-# A telepítő szkript futtatása a Docker image építése közben.
-RUN ./render-build.sh
-
+# A port beállítása, amin az alkalmazás futni fog
 ENV PORT 8000
 EXPOSE 8000
 
-# Az alkalmazás indító parancsa
-CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:${PORT}", "app:app"]
-
-FROM python:3.11-slim
-WORKDIR /app
-
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Az összes fájl másolása
-COPY . .
-
-# Ez a két sor biztosítja, hogy a script Linux-kompatibilis legyen.
-# 1. Eltávolítja a Windows-specifikus sorvégződéseket.
-RUN sed -i 's/\r$//' ./render-build.sh
-# 2. Futtathatóvá teszi a build scriptet.
-RUN chmod +x ./render-build.sh
-
-# A telepítő szkript futtatása a Docker image építése közben.
-RUN ./render-build.sh
-
-ENV PORT 8000
-EXPOSE 8000
-
-# Az alkalmazás indító parancsa
+# Az alkalmazás indító parancsa a Gunicorn webszerverrel
 CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:${PORT}", "app:app"]
