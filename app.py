@@ -1,66 +1,107 @@
-# setup_database.py
+# app.py (MÓDOSÍTOTT)
 
 import requests
 import pandas as pd
+from flask import Flask, render_template
+from sklearn.linear_model import LinearRegression
 import sqlite3
 import os
 from datetime import datetime
 
-# A konfigurációs változók ugyanazok, mint az app.py-ban
+# --- Konfiguráció ---
 DATA_DIR = os.environ.get('RENDER_DISK_PATH', '.')
 DB_FILE = os.path.join(DATA_DIR, 'crypto_data.db')
 CRYPTO_ID = 'bitcoin'
 VS_CURRENCY = 'usd'
 
-def init_db():
-    """Létrehozza az adatbázis táblát, ha még nem létezik."""
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+app = Flask(__name__)
+
+# Az init_db() hívás már nem szükséges itt, mert a build script elvégezte.
+
+def load_data_from_db():
+    # ... (Ez a függvény változatlan marad)
+    if not os.path.exists(DB_FILE):
+        return pd.DataFrame()
+    conn = sqlite3.connect(DB_FILE)
+    query = f"SELECT date, price FROM prices WHERE crypto_id='{CRYPTO_ID}' ORDER BY date ASC"
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    df['date'] = pd.to_datetime(df['date']).dt.date
+    return df
+
+def get_last_date_from_db():
+    # ... (Ez a függvény változatlan marad)
+    if not os.path.exists(DB_FILE):
+        return None
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS prices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            crypto_id TEXT NOT NULL,
-            date DATE NOT NULL,
-            price REAL NOT NULL,
-            UNIQUE(crypto_id, date)
-        )
-    ''')
-    conn.commit()
+    cursor.execute(f"SELECT MAX(date) FROM prices WHERE crypto_id='{CRYPTO_ID}'")
+    result = cursor.fetchone()[0]
     conn.close()
-    print("Adatbázis tábla sikeresen létrehozva/ellenőrizve.")
+    return datetime.strptime(result, '%Y-%m-%d').date() if result else None
 
-def populate_initial_data():
-    """Letölti a teljes historikus adatmennyiséget és elmenti az adatbázisba."""
-    print("Kezdeti adatfeltöltés megkezdése a CoinGecko API-ról...")
+def update_database_from_api():
+    """Már csak a legfrissebb, hiányzó adatokat tölti le."""
+    last_date = get_last_date_from_db()
+    if not last_date:
+        print("Adatbázis üres, a normál frissítés nem fut le.")
+        return
+
+    days_diff = (datetime.now().date() - last_date).days
+    if days_diff <= 1:
+        print("Az adatbázis naprakész.")
+        return
+    
+    print(f"Adatbázis frissítése, {days_diff} napnyi adat letöltése...")
     url = f"https://api.coingecko.com/api/v3/coins/{CRYPTO_ID}/market_chart"
-    params = {'vs_currency': VS_CURRENCY, 'days': 'max', 'interval': 'daily'}
+    params = {'vs_currency': VS_CURRENCY, 'days': days_diff, 'interval': 'daily'}
     try:
-        response = requests.get(url, params=params, timeout=120) # Hosszabb timeout a nagy letöltéshez
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
         data = response.json().get('prices', [])
-        
         if not data:
-            print("Nem érkezett adat az API-tól.")
             return
 
         df = pd.DataFrame(data, columns=['timestamp', 'price'])
+        df = df.iloc[:-1] if len(df) > 1 else df
         df['date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.strftime('%Y-%m-%d')
         df['crypto_id'] = CRYPTO_ID
         df = df[['crypto_id', 'date', 'price']]
         
         conn = sqlite3.connect(DB_FILE)
-        df.to_sql('prices', conn, if_exists='replace', index=False) # 'replace' biztosítja a tiszta feltöltést
+        df.to_sql('prices', conn, if_exists='append', index=False)
         conn.close()
-        
-        print(f"Sikeresen lementve {len(df)} historikus adatpont.")
-        
+        print(f"{len(df)} új adatpont mentve.")
     except requests.exceptions.RequestException as e:
-        print(f"Hiba a kezdeti adatfeltöltés során: {e}")
-        # Hiba esetén a program leáll, és a build sikertelen lesz, ami helyes.
-        exit(1)
+        print(f"Hiba a napi frissítés során: {e}")
+
+def train_and_predict(df):
+    # ... (Ez a függvény változatlan marad)
+    if df is None or len(df) < 2:
+        return 0
+    df['target'] = df['price'].shift(-1)
+    df.dropna(inplace=True)
+    X = df[['price']]
+    y = df['target']
+    model = LinearRegression()
+    model.fit(X, y)
+    last_known_price = df[['price']].iloc[-1].values.reshape(1, -1)
+    prediction = model.predict(last_known_price)
+    return prediction[0]
+
+@app.route('/')
+def index():
+    # ... (Ez a függvény szinte változatlan, de most már egy feltételezhetően létező adatbázissal dolgozik)
+    update_database_from_api()
+    crypto_df = load_data_from_db()
+    if crypto_df.empty or len(crypto_df) < 10:
+        error_message = "Nincs elegendő adat az adatbázisban. A build fázis valószínűleg sikertelen volt."
+        return render_template('index.html', error=error_message)
+    predicted_price = train_and_predict(crypto_df.copy())
+    chart_data = crypto_df.tail(90)
+    labels = [date.strftime('%Y-%m-%d') for date in chart_data['date']]
+    prices = [price for price in chart_data['price']]
+    return render_template('index.html', prediction=predicted_price, labels=labels, prices=prices)
 
 if __name__ == '__main__':
-    init_db()
-    populate_initial_data()
+    app.run(debug=True)
