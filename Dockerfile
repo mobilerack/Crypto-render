@@ -1,27 +1,32 @@
 # Hivatalos, pehelykönnyű Python alap image használata
 FROM python:3.11-slim
 
-# Munkakönyvtár beállítása az appon belül
+# Munkakönyvtár beállítása
 WORKDIR /app
 
-# A környezeti változók beállítása, hogy a Python logok azonnal megjelenjenek
-ENV PYTHONUNBUFFERED 1
+# A környezeti változók beállítása
+ENV PYTHONUNBUFFERED 1 \
+    PYTHONDONTWRITEBYTECODE 1
 
-# Először csak a requirements fájlt másoljuk be, hogy a Docker cache-t ki tudjuk használni
+# Rendszerszintű függőségek telepítése és egy nem-root felhasználó létrehozása
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system app && adduser --system --group app
+
+# Python függőségek telepítése
 COPY requirements.txt .
-
-# A Python függőségek telepítése (a script első parancsa)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# A projekt összes többi fájljának másolása
-COPY . .
+# A tulajdonos megváltoztatása a nem-root felhasználóra
+COPY --chown=app:app . .
 
-# Az adatbázis létrehozása és feltöltése (a script második parancsa)
-RUN python setup_database.py
+# Átváltás a nem-root felhasználóra
+USER app
 
-# A port beállítása, amin az alkalmazás futni fog
+# A port beállítása
 ENV PORT 8000
 EXPOSE 8000
 
-# Az alkalmazás indító parancsa a Gunicorn webszerverrel
+# Az alkalmazás indító parancsa
 CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:${PORT}", "app:app"]
