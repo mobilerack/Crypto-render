@@ -24,4 +24,4 @@ EXPOSE 8000
 # A Gunicorn elindítja az app.py fájlban található 'app' nevű Flask alkalmazást.
 # A '0.0.0.0' host szükséges, hogy a konténeren kívülről is elérhető legyen.
 # A --workers=4 a párhuzamos kérések kezelését segíti, a --timeout 120 pedig időt ad a hosszabb adatletöltéseknek.
-CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:${PORT}", "app:app"]
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:10000", "app:app"]
