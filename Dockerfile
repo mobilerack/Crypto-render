@@ -1,19 +1,18 @@
-# Használj egy hivatalos, kisméretű Python futtatókörnyezetet
-FROM python:3.9-slim
-
-# Állítsd be a munkakönyvtárat a konténeren belül
+# Dockerfile (MÓDOSÍTOTT)
+FROM python:3.11-slim
 WORKDIR /app
 
-# Másold át a függőségeket tartalmazó fájlt és telepítsd őket
-COPY requirements.txt .
+COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Másold át a projekt többi fájlját a konténerbe
+# Az összes fájl másolása
 COPY . .
 
-# Add meg a portot, amin az alkalmazás futni fog (Render ezt preferálja)
-EXPOSE 10000
+# A build script futtathatóvá tétele
+RUN chmod +x ./render-build.sh
 
-# Parancs az alkalmazás elindítására egy stabil, több szálon futó Gunicorn szerverrel
-# Az "app:app" azt jelenti: futtasd az "app.py" fájlban lévő "app" nevű Flask objektumot
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:10000", "app:app"]
+ENV PORT 8000
+EXPOSE 8000
+
+# A Start parancs változatlan
+CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:${PORT}", "app:app"]
