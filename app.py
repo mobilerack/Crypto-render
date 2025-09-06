@@ -1,4 +1,4 @@
-# app.py (MÓDOSÍTOTT)
+# app.py (KIEGÉSZÍTETT)
 
 import requests
 import pandas as pd
@@ -16,10 +16,16 @@ VS_CURRENCY = 'usd'
 
 app = Flask(__name__)
 
-# Az init_db() hívás már nem szükséges itt, mert a build script elvégezte.
+# KIEGÉSZÍTÉS: Új útvonal a Render állapot-ellenőrzéséhez (Health Check)
+# Ez az útvonal egy egyszerű "OK" választ ad, nem nyúl az adatbázishoz,
+# így a Render gyorsan és megbízhatóan le tudja ellenőrizni, hogy az app fut.
+@app.route('/healthz')
+def health_check():
+    return "OK", 200
+
+# --- A többi függvény innentől változatlan ---
 
 def load_data_from_db():
-    # ... (Ez a függvény változatlan marad)
     if not os.path.exists(DB_FILE):
         return pd.DataFrame()
     conn = sqlite3.connect(DB_FILE)
@@ -30,7 +36,6 @@ def load_data_from_db():
     return df
 
 def get_last_date_from_db():
-    # ... (Ez a függvény változatlan marad)
     if not os.path.exists(DB_FILE):
         return None
     conn = sqlite3.connect(DB_FILE)
@@ -76,7 +81,6 @@ def update_database_from_api():
         print(f"Hiba a napi frissítés során: {e}")
 
 def train_and_predict(df):
-    # ... (Ez a függvény változatlan marad)
     if df is None or len(df) < 2:
         return 0
     df['target'] = df['price'].shift(-1)
@@ -91,7 +95,6 @@ def train_and_predict(df):
 
 @app.route('/')
 def index():
-    # ... (Ez a függvény szinte változatlan, de most már egy feltételezhetően létező adatbázissal dolgozik)
     update_database_from_api()
     crypto_df = load_data_from_db()
     if crypto_df.empty or len(crypto_df) < 10:
