@@ -29,4 +29,4 @@ ENV PORT 8000
 EXPOSE 8000
 
 # Az alkalmazás indító parancsa
-CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:${PORT}", "app:app"]
+CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:8080", "app:app"]
