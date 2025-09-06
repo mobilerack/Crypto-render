@@ -10,37 +10,44 @@
         h1, h2 { text-align: center; color: #444; }
         .prediction { text-align: center; font-size: 1.5em; margin: 20px; padding: 15px; background-color: #e0e7ff; border-radius: 8px; }
         .prediction span { font-weight: bold; color: #0056b3; }
+        .error { text-align: center; font-size: 1em; margin: 20px; padding: 15px; background-color: #ffe0e0; border: 1px solid #c00; color: #c00; border-radius: 8px; }
     </style>
 </head>
 <body>
     <h1>Kripto Árfolyam Prediktor</h1>
-    <h2>Bitcoin (BTC) árfolyamának előrejelzése USD-ben</h2>
+    
+    {% if error %}
+        <div class="error">
+            <h2>Hiba történt</h2>
+            <p>{{ error }}</p>
+        </div>
+    {% else %}
+        <h2>Bitcoin (BTC) árfolyamának előrejelzése USD-ben</h2>
+        <div class="prediction">
+            A modell jóslata a következő napra: <span>${{ prediction | round(2) }}</span>
+        </div>
+        <div>
+            <canvas id="priceChart"></canvas>
+        </div>
 
-    <div class="prediction">
-        A modell jóslata a következő napra: <span>${{ prediction | round(2) }}</span>
-    </div>
+        <script>
+            const labels = {{ labels | tojson }};
+            const prices = {{ prices | tojson }};
 
-    <div>
-        <canvas id="priceChart"></canvas>
-    </div>
+            const data = {
+                labels: labels,
+                datasets: [{
+                    label: 'Bitcoin Árfolyam (USD)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgb(75, 192, 192)',
+                    data: prices,
+                    fill: true,
+                }]
+            };
 
-    <script>
-        const labels = {{ labels | tojson }};
-        const prices = {{ prices | tojson }};
-
-        const data = {
-            labels: labels,
-            datasets: [{
-                label: 'Bitcoin Árfolyam (USD)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                borderColor: 'rgb(75, 192, 192)',
-                data: prices,
-                fill: true,
-            }]
-        };
-
-        const config = { type: 'line', data: data, options: { responsive: true } };
-        new Chart(document.getElementById('priceChart'), config);
-    </script>
+            const config = { type: 'line', data: data, options: { responsive: true } };
+            new Chart(document.getElementById('priceChart'), config);
+        </script>
+    {% endif %}
 </body>
 </html>
