@@ -8,16 +8,13 @@ from datetime import datetime
 
 DATA_DIR = os.environ.get('RENDER_DISK_PATH', '.')
 DB_FILE = os.path.join(DATA_DIR, 'crypto_data.db')
-CRYPTO_ID = 'bitcoin'
-VS_CURRENCY = 'usd'
-API_KEY = os.environ.get('COINGECKO_API_KEY')
+CRYPTO_ID = 'BTC' # A CoinDesk API a Bitcoinra (BPI) van specializálódva
 
 def init_db():
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    # JAVÍTÁS: Itt van a teljes, helyes SQL parancs.
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS prices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,35 +29,28 @@ def init_db():
     print("Adatbázis tábla sikeresen létrehozva/ellenőrizve.")
 
 def populate_initial_data():
-    print("Kezdeti adatfeltöltés megkezdése a CoinGecko API-ról...")
+    print("Kezdeti adatfeltöltés megkezdése a CoinDesk API-ról...")
     
-    if not API_KEY:
-        print("Hiba: COINGECKO_API_KEY környezeti változó nincs beállítva!")
-        exit(1)
-
-    url = f"https://api.coingecko.com/api/v3/coins/{CRYPTO_ID}/market_chart"
-    params = {
-        'vs_currency': VS_CURRENCY,
-        'days': 'max',
-        'interval': 'daily',
-        'x_cg_demo_api_key': API_KEY 
-    }
+    # MÓDOSÍTÁS: CoinDesk API URL és dátum alapú paraméterek. Nincs API kulcs.
+    start_date = "2010-07-18" # A CoinDesk BPI adatainak kezdete
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    url = f"https://api.coindesk.com/v1/bpi/historical/close.json?start={start_date}&end={end_date}"
+    
     try:
-        response = requests.get(url, params=params, timeout=180)
+        response = requests.get(url, timeout=180)
         response.raise_for_status()
-        data = response.json().get('prices', [])
+        data = response.json().get('bpi', {})
         
         if not data:
             print("Nem érkezett adat az API-tól.")
             return
 
-        df = pd.DataFrame(data, columns=['timestamp', 'price'])
-        df['date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.strftime('%Y-%m-%d')
+        # MÓDOSÍTÁS: A CoinDesk válaszának (dictionary) feldolgozása
+        df = pd.DataFrame(list(data.items()), columns=['date', 'price'])
         df['crypto_id'] = CRYPTO_ID
-        df = df[['crypto_id', 'date', 'price']]
         
         conn = sqlite3.connect(DB_FILE)
-        df.to_sql('prices', conn, if_exists='append', index=False)
+        df.to_sql('prices', conn, if_exists='replace', index=False)
         conn.close()
         
         print(f"Sikeresen lementve {len(df)} historikus adatpont.")
@@ -76,3 +66,4 @@ if __name__ == '__main__':
         populate_initial_data()
     else:
         print("Adatbázis már létezik és feltöltve, a kezdeti telepítés kihagyva.")
+
