@@ -1,79 +1,17 @@
 # app.py
+
 import requests
 import pandas as pd
 from flask import Flask, render_template
 from sklearn.linear_model import LinearRegression
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- Konfiguráció ---
 DATA_DIR = os.environ.get('RENDER_DISK_PATH', '.')
 DB_FILE = os.path.join(DATA_DIR, 'crypto_data.db')
-CRYPTO_ID = 'bitcoin'
-VS_CURRENCY = 'usd'
-# Beolvassuk az API kulcsot a környezeti változóból
-API_KEY = os.environ.get('COINGECKO_API_KEY')
-
-app = Flask(__name__)
-# ... (a /healthz útvonal és a többi függvény változatlan, kivéve az update_database_from_api)
-
-def update_database_from_api():
-    """Már csak a legfrissebb, hiányzó adatokat tölti le, API kulccsal."""
-    # ... (a függvény eleje változatlan)
-    last_date = get_last_date_from_db()
-    if not last_date: # ...
-        return
-    days_diff = (datetime.now().date() - last_date).days
-    if days_diff <= 1: # ...
-        return
-    
-    print(f"Adatbázis frissítése, {days_diff} napnyi adat letöltése...")
-    url = f"https://api.coingecko.com/api/v3/coins/{CRYPTO_ID}/market_chart"
-    
-    # Hozzáadjuk az API kulcsot a kérés paramétereihez
-    params = {
-        'vs_currency': VS_CURRENCY,
-        'days': days_diff,
-        'interval': 'daily',
-        'x_cg_demo_api_key': API_KEY
-    }
-    
-    # Figyelem: Ha nincs API kulcs, a frissítés hiba nélkül átugrásra kerül
-    if not API_KEY:
-        print("API kulcs hiányzik, a napi frissítés kihagyva.")
-        return
-
-    try:
-        response = requests.get(url, params=params, timeout=30)
-        # ... (a függvény többi része változatlan)
-        response.raise_for_status()
-        data = response.json().get('prices', [])
-        if not data:
-            return
-        df = pd.DataFrame(data, columns=['timestamp', 'price'])
-        # ... (a df feldolgozása és mentése)
-    except requests.exceptions.RequestException as e:
-        print(f"Hiba a napi frissítés során: {e}")
-
-# ... (a többi függvény, mint a train_and_predict és az index, változatlan)
-# Az alábbiakban a teljesség kedvéért a teljes, helyes app.py szerepel.
-
-# app.py TELJES KÓDJA
-
-import requests
-import pandas as pd
-from flask import Flask, render_template
-from sklearn.linear_model import LinearRegression
-import sqlite3
-import os
-from datetime import datetime
-
-DATA_DIR = os.environ.get('RENDER_DISK_PATH', '.')
-DB_FILE = os.path.join(DATA_DIR, 'crypto_data.db')
-CRYPTO_ID = 'bitcoin'
-VS_CURRENCY = 'usd'
-API_KEY = os.environ.get('COINGECKO_API_KEY')
+CRYPTO_ID = 'BTC' # A CoinDesk API a Bitcoinra (BPI) van specializálódva
 
 app = Flask(__name__)
 
@@ -87,7 +25,8 @@ def load_data_from_db():
     query = f"SELECT date, price FROM prices WHERE crypto_id='{CRYPTO_ID}' ORDER BY date ASC"
     df = pd.read_sql_query(query, conn)
     conn.close()
-    df['date'] = pd.to_datetime(df['date']).dt.date
+    if not df.empty:
+      df['date'] = pd.to_datetime(df['date']).dt.date
     return df
 
 def get_last_date_from_db():
@@ -100,33 +39,37 @@ def get_last_date_from_db():
     return datetime.strptime(result, '%Y-%m-%d').date() if result else None
 
 def update_database_from_api():
+    """A hiányzó adatokat tölti le a CoinDesk-ről."""
     last_date = get_last_date_from_db()
     if not last_date:
         print("Adatbázis üres, a normál frissítés nem fut le.")
         return
-    days_diff = (datetime.now().date() - last_date).days
-    if days_diff <= 1:
+    
+    today = datetime.now().date()
+    # Ha az utolsó dátum a tegnapi vagy a mai, akkor naprakészek vagyunk
+    if last_date >= today - timedelta(days=1):
         print("Az adatbázis naprakész.")
         return
-    
-    if not API_KEY:
-        print("API kulcs hiányzik, a napi frissítés kihagyva.")
-        return
         
-    print(f"Adatbázis frissítése, {days_diff} napnyi adat letöltése...")
-    url = f"https://api.coingecko.com/api/v3/coins/{CRYPTO_ID}/market_chart"
-    params = {'vs_currency': VS_CURRENCY, 'days': days_diff, 'interval': 'daily', 'x_cg_demo_api_key': API_KEY}
+    start_date = (last_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    end_date = today.strftime("%Y-%m-%d")
+    
+    print(f"Adatbázis frissítése, {start_date} és {end_date} közötti adatok letöltése...")
+    # MÓDOSÍTÁS: CoinDesk API URL és dátum alapú paraméterek
+    url = f"https://api.coindesk.com/v1/bpi/historical/close.json?start={start_date}&end={end_date}"
     
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
-        data = response.json().get('prices', [])
-        if not data: return
-        df = pd.DataFrame(data, columns=['timestamp', 'price'])
-        df = df.iloc[:-1] if len(df) > 1 else df
-        df['date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.strftime('%Y-%m-%d')
+        data = response.json().get('bpi', {})
+        if not data: 
+            print("Nincs új adat a frissítéshez.")
+            return
+        
+        # MÓDOSÍTÁS: A CoinDesk válaszának feldolgozása
+        df = pd.DataFrame(list(data.items()), columns=['date', 'price'])
         df['crypto_id'] = CRYPTO_ID
-        df = df[['crypto_id', 'date', 'price']]
+        
         conn = sqlite3.connect(DB_FILE)
         df.to_sql('prices', conn, if_exists='append', index=False)
         conn.close()
@@ -161,3 +104,4 @@ def index():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
