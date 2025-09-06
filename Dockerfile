@@ -1,32 +1,23 @@
-# Hivatalos, pehelykönnyű Python alap image használata
+# Dockerfile
 FROM python:3.11-slim
-
-# Munkakönyvtár beállítása
 WORKDIR /app
 
-# A környezeti változók beállítása
-ENV PYTHONUNBUFFERED 1 \
-    PYTHONDONTWRITEBYTECODE 1
+# Telepítjük a 'dos2unix' eszközt
+RUN apt-get update && apt-get install -y dos2unix
 
-# Rendszerszintű függőségek telepítése és egy nem-root felhasználó létrehozása
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc \
-    && rm -rf /var/lib/apt/lists/* \
-    && addgroup --system app && adduser --system --group app
+# Az összes fájl másolása
+COPY . .
 
-# Python függőségek telepítése
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# A dos2unix eszközzel "megtisztítjuk" a kritikus fájlokat
+RUN dos2unix ./start.sh
+RUN dos2unix ./setup_database.py
+RUN dos2unix ./requirements.txt
 
-# A tulajdonos megváltoztatása a nem-root felhasználóra
-COPY --chown=app:app . .
+# Telepítjük a Python függőségeket
+RUN pip install -r requirements.txt
 
-# Átváltás a nem-root felhasználóra
-USER app
+# Futtathatóvá tesszük az indító szkriptet
+RUN chmod +x ./start.sh
 
-# A port beállítása
-ENV PORT 8000
-EXPOSE 8000
-
-# Az alkalmazás indító parancsa
-CMD ["gunicorn", "--workers=4", "--timeout=120", "--bind", "0.0.0.0:8000", "app:app"]
+# Alapértelmezett indító parancs (ezt felül fogjuk bírálni a Render UI-ban)
+CMD ["bash", "./start.sh"]
